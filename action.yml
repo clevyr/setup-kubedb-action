@@ -1,0 +1,75 @@
+name: Setup KubeDB
+description: GitHub Action to install KubeDB during CI/CD.
+inputs:
+  repo:
+    description: The KubeDB repo to use
+    default: clevyr/kubedb
+  token:
+    description: GitHub token
+    default: ${{ github.token }}
+  version:
+    description: The KubeDB version to install
+    default: latest
+outputs:
+  version:
+    description: The KubeDB version that was installed
+    value: ${{ steps.install.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - id: install
+      name: Install KubeDB
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        GH_REPO: ${{ inputs.repo }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+
+        if [[ "$VERSION" == latest ]]; then
+          VERSION=
+        fi
+
+        case "${{ runner.os }}" in
+          Linux)
+            OS=linux
+            FILENAME=kubedb
+            ;;
+          macOS)
+            OS=darwin
+            FILENAME=kubedb
+            ;;
+          Windows)
+            OS=windows
+            FILENAME=kubedb.exe
+            ;;
+        esac
+
+        RELEASE="$(gh release view --json=name,assets $VERSION)"
+        VERSION="$(jq -r '.name' <<<"$RELEASE")"
+        echo "version=$VERSION" >>$GITHUB_OUTPUT
+        echo "Installing kubedb $VERSION..."
+
+        DEST="$RUNNER_TEMP/kubedb"
+        URL="$(jq -r --arg OS "$OS" \
+          '.assets[] | select(.name | ascii_downcase | test($OS + "_(amd64|x86_64).(tar.gz|zip)$")) | .url' \
+          <<<"$RELEASE" \
+        )"
+
+        echo "Downloading $URL"
+        mkdir -p "$DEST"
+        cd "$DEST"
+        case "$URL" in
+          *.tar.gz)
+            curl -sfL "$URL" | tar -xzf - "$FILENAME";;
+          *.zip)
+            curl -sfL -o app.zip "$URL"
+            unzip app.zip "$FILENAME"
+            mv "$FILENAME" "$DEST"
+            rm app.zip
+            ;;
+          *)
+            echo Invalid file type; exit 1;;
+        esac
+        echo "$DEST" >>$GITHUB_PATH
