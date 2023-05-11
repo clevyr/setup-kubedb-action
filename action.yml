@@ -1,5 +1,8 @@
 name: Setup KubeDB
 description: GitHub Action to install KubeDB during CI/CD.
+branding:
+  icon: download
+  color: blue
 inputs:
   repo:
     description: The KubeDB repo to use
